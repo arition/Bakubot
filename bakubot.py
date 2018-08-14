@@ -21,10 +21,6 @@ def align_images(im1, im2):
     keypoints1, descriptors1 = orb.detectAndCompute(im1_gray, None)
     keypoints2, descriptors2 = orb.detectAndCompute(im2_gray, None)
 
-    bf = cv2.BFMatcher()
-    matches = bf.knnMatch(descriptors1, descriptors2, k=2)
-    matches = [a[0] for a in matches]
-
     # Match features.
     matcher = cv2.DescriptorMatcher_create(
         cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
@@ -72,17 +68,17 @@ def replace_images(im1, im2, immask1, immask2):
     # select not white pixels
     indexarr_temp = (immask1 != 255).nonzero()
     indexarr1 = sorted(
-        zip(indexarr_temp[0], indexarr_temp[1]), key=lambda t: t[0])
+        zip(indexarr_temp[0], indexarr_temp[1]), key=lambda t: (t[0], t[1]))
     indexarr1_x = [a[0] for a in indexarr1]
     indexarr_temp = (immask2 != 255).nonzero()
     indexarr2 = sorted(
-        zip(indexarr_temp[0], indexarr_temp[1]), key=lambda t: t[0])
+        zip(indexarr_temp[0], indexarr_temp[1]), key=lambda t: (t[0], t[1]))
     indexarr2_x = [a[0] for a in indexarr2]
     for (x, y) in indexarr1:
         left = bisect.bisect_left(indexarr2_x, x-dg)
         right = bisect.bisect_right(indexarr2_x, x+dg)
         for (dx, dy) in indexarr2[left:right]:
-            if x-dg < dx < x+dg and y-dg < dy < y+dg:
+            if y-dg < dy < y+dg:
                 mask[0 if x-mg < 0 else x-mg: shape[0] if x+mg > shape[0] else x+mg,
                      0 if y-mg < 0 else y-mg: shape[1] if y+mg > shape[1] else y+mg] = 1
                 break
@@ -91,7 +87,7 @@ def replace_images(im1, im2, immask1, immask2):
         left = bisect.bisect_left(indexarr1_x, x-dg)
         right = bisect.bisect_right(indexarr1_x, x+dg)
         for (dx, dy) in indexarr1[left:right]:
-            if x-dg < dx < x+dg and y-dg < dy < y+dg:
+            if y-dg < dy < y+dg:
                 mask[0 if x-mg < 0 else x-mg: shape[0] if x+mg > shape[0] else x+mg,
                      0 if y-mg < 0 else y-mg: shape[1] if y+mg > shape[1] else y+mg] = 1
                 break
@@ -101,6 +97,7 @@ def replace_images(im1, im2, immask1, immask2):
     img_text = cv2.bitwise_or(im2, im2, mask=mask_text)
     img_bg = cv2.bitwise_or(im1, im1, mask=mask_bg)
     result = cv2.bitwise_or(img_text, img_bg)
+    result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
     return result
 
 
@@ -138,7 +135,7 @@ def bound(diff, diff2):
 
 
 def main():
-    for i in range(7, 198):
+    for i in range(1, 198):
         # Read reference image
         ref_filename = "jpn/p_"+str(i).zfill(3)+".jpg"
         print("Reading reference image : ", ref_filename)
