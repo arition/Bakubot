@@ -1,16 +1,14 @@
+import argparse
 import bisect
+import os
+
 import cv2
 import numpy as np
 import pillowfight
 from PIL import Image
 
-MAX_FEATURES = 5000
-GOOD_MATCH_PERCENT = 0.01
-REPLACE_MARGIN = 20
-DETECT_MARGIN = 40
 
-
-def align_images(im1, im2):
+def align_images(im1, im2, MAX_FEATURES, GOOD_MATCH_PERCENT):
 
     # Convert images to grayscale
     im1_gray = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
@@ -57,7 +55,7 @@ def align_images(im1, im2):
     return im1_reg, h
 
 
-def replace_images(im1, im2, immask1, immask2):
+def replace_images(im1, im2, immask1, immask2, DETECT_MARGIN, REPLACE_MARGIN):
     # im1 = jpn
     # im2 = chs
 
@@ -135,21 +133,44 @@ def bound(diff, diff2):
 
 
 def main():
-    for i in range(1, 198):
+    parser = argparse.ArgumentParser(description='Replace texts in picture.')
+    parser.add_argument(
+        '--ori', help='Original Picture Folder Path', required=True)
+    parser.add_argument(
+        '--ref', help='Reference Picture Folder Path', required=True)
+    parser.add_argument(
+        '--out', '-o', help='Output folder Path', default='result', metavar='result')
+    parser.add_argument('--max-feature', type=int,
+                        help='Max feature for aliging', default=5000, metavar='5000')
+    parser.add_argument('--good-match-percent', type=float,
+                        help='Good match percent for aliging', default=0.01, metavar='0.01')
+    parser.add_argument('--detect-margin', type=int,
+                        help='margin for detecting replace texts, larger is slower', default=40, metavar='40')
+    parser.add_argument('--replace-margin', type=int,
+                        help='margin for actually replaced texts', default=20, metavar='20')
+    args = parser.parse_args()
+
+    orifiles = [os.path.join(args.ori, fi) for fi in os.listdir(args.ori)
+                if fi.endswith('.jpg') or fi.endswith('.png')]
+    reffiles = [os.path.join(args.ref, fi) for fi in os.listdir(args.ref)
+                if fi.endswith('.jpg') or fi.endswith('.png')]
+
+    i = 0
+
+    for ref_filename, im_filename in zip(orifiles, reffiles):
         # Read reference image
-        ref_filename = "jpn/p_"+str(i).zfill(3)+".jpg"
         print("Reading reference image : ", ref_filename)
         im_reference = cv2.imread(ref_filename, cv2.IMREAD_COLOR)
 
         # Read image to be aligned
-        im_filename = "chs/"+str(i).zfill(3)+".jpg"
         print("Reading image to align : ", im_filename)
         im = cv2.imread(im_filename, cv2.IMREAD_COLOR)
 
         print("Aligning images ...")
         # Registered image will be resotred in im_aligned.
         # The estimated homography will be stored in h.
-        im_aligned, _ = align_images(im, im_reference)
+        im_aligned, _ = align_images(
+            im, im_reference, args.max_feature, args.good_match_percent)
 
         # Write aligned image to disk.
         aligned_filename = "aligned.jpg"
@@ -174,17 +195,19 @@ def main():
         print("Saving swt filtered image : ", swt_filename_ref)
         cv2.imwrite(swt_filename_ref, imswt_ref)
 
-        result_filename = "result/"+str(i).zfill(3)+".jpg"
+        result_filename = os.path.join(args.out, str(i)+".jpg")
         print("Replacing texts ...")
         imswt_gray = cv2.cvtColor(imswt, cv2.COLOR_BGR2GRAY)
         imswt_ref_gray = cv2.cvtColor(imswt_ref, cv2.COLOR_BGR2GRAY)
         im_result = replace_images(
-            im_reference, im_aligned, imswt_gray, imswt_ref_gray)
+            im_reference, im_aligned, imswt_gray, imswt_ref_gray,
+            args.detect_margin, args.replace_margin)
         print("Saving result image : ", result_filename)
         cv2.imwrite(result_filename, im_result)
 
         im_bound = bound(imswt_gray, imswt_ref_gray)
         cv2.imwrite("bound.jpg", im_bound)
+        i = i+1
 
 
 if __name__ == '__main__':
